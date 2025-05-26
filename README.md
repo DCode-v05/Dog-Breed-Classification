@@ -2,10 +2,6 @@
 
 Welcome to the **Dog Breed Classification** project! This repository contains a full pipeline for identifying the breed of a dog from an image using deep learning and transfer learning with TensorFlow and TensorFlow Hub.
 
----
-
-## 📌 Overview
-
 The goal of this project is to classify images of dogs into one of 120 different breeds. We make use of **MobileNetV2**, a lightweight and efficient CNN model, for feature extraction and fine-tuning.
 
 This project is structured to:
