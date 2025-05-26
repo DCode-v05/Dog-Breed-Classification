@@ -40,13 +40,13 @@ Dog-Breed-Classification/
 │
 ├── 📂 train/                        # Folder containing training images
 ├── 📂 test/                         # Folder containing test images
-├── 📂 Dog Images/                  # Folder for custom images to test
-├── 📝 labels.csv                   # Training labels (image ID, breed)
-├── 📝 sample_submission.csv       # Sample submission file
-├── 📓 Dog Breed Classifier.ipynb  # Main notebook
-├── 📁 logs/                        # TensorBoard logs
-├── 📁 models/                      # Saved model files (.h5)
-└── 📝 final_predictions.csv       # Final output CSV for Kaggle submission
+├── 📂 Dog Images/                   # Folder for custom images to test
+├── 📝 labels.csv                    # Training labels (image ID, breed)
+├── 📝 sample_submission.csv         # Sample submission file
+├── 📓 Dog Breed Classifier.ipynb    # Main notebook
+├── 📁 logs/                         # TensorBoard logs
+├── 📁 models/                       # Saved model files (.h5)
+└── 📝 final_predictions.csv         # Final output CSV for Kaggle submission
 ```
 
 ---
