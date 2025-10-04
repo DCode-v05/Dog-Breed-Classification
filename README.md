@@ -74,7 +74,7 @@ loaded_model = load_model("best_model.h5", custom_objects={"KerasLayer": hub.Ker
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/TensoRag/Dog-Breed-Classification.git
+git clone https://github.com/DCode-v05/Dog-Breed-Classification.git
 cd Dog-Breed-Classification
 ```
 
@@ -132,7 +132,7 @@ Contributions are welcome! To contribute:
 5. Open a pull request describing your changes.
 
 ## Contact
-- **GitHub:** [TensoRag](https://github.com/TensoRag)
+- **GitHub:** [DCode-v05](https://github.com/DCode-v05)
 - **Email:** denistanb05@gmail.com
 
 ---
