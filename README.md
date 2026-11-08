@@ -1,44 +1,172 @@
 # Dog Breed Classification
 
-Transfer-learning image classifier for the Kaggle Dog Breed Identification competition: given a photo of a dog, predict one of 120 breeds. It fine-tunes a MobileNetV2 model from TensorFlow Hub (`mobilenet_v2_130_224`) with a `Dense(120, softmax)` head.
+**A transfer-learning image classifier that identifies a dog's breed from a photo across 120 breeds, built on the Kaggle Dog Breed Identification dataset.**
 
-## Data
+![Python](https://img.shields.io/badge/Python-3776AB?style=flat&logo=python&logoColor=white) ![TensorFlow](https://img.shields.io/badge/TensorFlow-FF6F00?style=flat&logo=tensorflow&logoColor=white) ![Keras](https://img.shields.io/badge/Keras-D00000?style=flat&logo=keras&logoColor=white) ![NumPy](https://img.shields.io/badge/NumPy-013243?style=flat&logo=numpy&logoColor=white) ![pandas](https://img.shields.io/badge/pandas-150458?style=flat&logo=pandas&logoColor=white) ![scikit-learn](https://img.shields.io/badge/scikit--learn-F7931E?style=flat&logo=scikitlearn&logoColor=white) ![Jupyter](https://img.shields.io/badge/Jupyter-F37626?style=flat&logo=jupyter&logoColor=white) ![Google Colab](https://img.shields.io/badge/Google%20Colab-F9AB00?style=flat&logo=googlecolab&logoColor=white)
 
-- `train/`: 10,222 labelled images, with breeds listed in `labels.csv`
-- `test/`: 10,357 unlabelled images
-- `sample_submission.csv`: the Kaggle submission format (an `id` column plus one probability column per breed)
-- `Dog Images/`: three photos (basset, Bedlington terrier, pug) for trying the model on your own images
+## Overview
 
-## Pipeline
+This is an end-to-end deep learning pipeline that takes a photo of a dog and predicts which of 120 breeds it is. It is built around the [Kaggle Dog Breed Identification](https://www.kaggle.com/c/dog-breed-identification) competition, which provides 10,222 labeled training images and 10,357 unlabeled test images and asks for a probability across all 120 breeds for each test image.
 
-Everything is in `Dog Breed Classification.ipynb`:
+Everything lives in a single Jupyter notebook (95 cells: 77 code, 18 markdown) that goes from raw image files to a Kaggle-format submission. The approach is transfer learning. Instead of training a convolutional network from scratch on a fairly small dataset, it takes a MobileNetV2 backbone pre-trained on ImageNet and fine-tunes it for the 120-breed problem. I built and ran it in Google Colab to get a GPU, with the dataset and model checkpoints stored on Google Drive.
 
-1. Read `labels.csv` and one-hot encode the 120 breeds.
-2. Decode each JPEG, scale to 0-1, resize to 224x224 and batch with `tf.data` (batch size 32).
-3. Train first on a 1,000-image subset to check the pipeline, then on all 10,222 images. Callbacks are EarlyStopping on `val_accuracy` and TensorBoard.
-4. Save each run as `.h5` in `model/` (one for the 1,000-image run, one for the full run).
-5. Predict the test set, write `predictions.csv` and `predictions.xlsx`, and format `final_predictions.csv` as the Kaggle submission.
-6. Predict the top 5 breeds for the images in `Dog Images/`.
+This is a learning project that follows the standard "dog vision" transfer-learning workflow, but it runs the full loop: load and tensorize images, batch them, train, evaluate, predict on the test set, format a submission, and classify your own photos. The full-dataset run reaches roughly 87% accuracy on the training data.
 
-Reloading a saved model needs the TF-Hub layer registered:
+## Key Features
+
+- Classifies a dog image into one of **120 breeds** with a softmax probability distribution.
+- **Transfer learning with MobileNetV2** from TensorFlow Hub (`mobilenet_v2_130_224`), fine-tuned end-to-end for this dataset.
+- Full image pipeline: file path → decoded JPEG → normalized float tensor → resized to 224×224 → batched (`tf.data`, batch size 32).
+- One-hot label encoding driven by `labels.csv`, with a unique-breed vocabulary of 120 classes.
+- Train/validation split via scikit-learn's `train_test_split` for the subset experiments.
+- Two training modes built into the notebook: a fast **1,000-image subset** for quick iteration, and a **full 10,222-image** run.
+- Training callbacks: **EarlyStopping** (monitors `val_accuracy`, patience 3) and **TensorBoard** logging to `logs/` for loss and accuracy curves.
+- Model persistence to `.h5` (HDF5), with reload support that re-registers the custom `hub.KerasLayer`.
+- Batch prediction over all 10,357 test images, exported to `predictions.csv` and `predictions.xlsx`.
+- Kaggle-format submission file (`final_predictions.csv`): an `id` column plus one probability column per breed.
+- **Predict on your own images**: drop photos into `Dog Images/` and get the top-5 breeds with confidence scores.
+- Visualization helpers: accuracy/loss curves, top-prediction bar charts, and side-by-side actual-vs-predicted displays.
+
+## How It Works
+
+The notebook is a linear pipeline, and its markdown headers follow the same order: get data ready → tensors → batches → model → callbacks → fit → predict → evaluate → full-dataset training → save/load → test predictions → submission → custom images.
+
+### Data preparation
+
+`labels.csv` maps each image ID to a breed string (e.g. `golden_retriever`, `boston_bull`, `dingo`). The notebook builds a sorted list of the 120 unique breeds and turns each label into a one-hot vector of length 120, which is the `OUTPUT_SHAPE`. Image file paths are assembled from the IDs in `train/`.
+
+### Preprocessing into tensors and batches
+
+Each image is read from disk, JPEG-decoded into a 3-channel tensor, cast to float and scaled to the 0–1 range, then resized to a fixed **224×224×3** (`IMG_SIZE = 224`, the input size MobileNetV2 expects). Images and labels are zipped into a `tf.data` pipeline and grouped into batches of 32 (`BATCH_SIZE = 32`) so they stream to the GPU during training.
+
+### Model
+
+The model is a small `tf_keras.Sequential`:
 
 ```python
-import tensorflow_hub as hub
-from tensorflow.keras.models import load_model
-model = load_model("model/<file>.h5", custom_objects={"KerasLayer": hub.KerasLayer})
+model = tf_keras.Sequential([
+    hub.KerasLayer(MODEL_URL, trainable=True),
+    tf_keras.layers.Dense(output_shape, activation="softmax"),
+])
 ```
 
-## Results
+`MODEL_URL` is the TF-Hub MobileNetV2 classification model `mobilenet_v2_130_224/classification/4`. It is loaded with `trainable=True`, so the whole backbone is fine-tuned instead of frozen: the pre-trained ImageNet weights are the starting point and they keep updating during training. A `Dense(120, softmax)` head sits on top to produce the per-breed probabilities. The model compiles with **categorical cross-entropy** loss, the **Adam** optimizer, and accuracy as the tracked metric.
 
-The full-data run reached about 87% accuracy, but that is training accuracy: it was trained on all labelled images with no validation split. The Kaggle metric is multi-class log loss on the hidden test set, which is not computed in the notebook. Treat the figure as a sign that training worked, not as a test score.
+### Callbacks
 
-## Running it
+Two callbacks wire into `model.fit`:
+
+- **EarlyStopping** on `val_accuracy` with `patience=3` stops training once validation accuracy hasn't improved for three epochs, which saves epochs and limits overfitting on the subset runs.
+- **TensorBoard** writes per-run event files into timestamped folders under `logs/`, so you can inspect the training and validation curves afterwards.
+
+`NUM_EPOCHS` is set up to 100, but EarlyStopping usually cuts the subset runs off well before that.
+
+### Training: subset then full
+
+The notebook first trains on a **1,000-image subset** (`NUM_IMAGES = 1000`) with a held-out validation split, which is handy for checking the pipeline and iterating quickly. It then retrains on the **full 10,222-image** set (320 batches per epoch) to get the model that's actually used for predictions. Each run saves an `.h5` checkpoint under `model/`, named with a timestamp and the run type (`...1000-images-mobilenetv2-Adam.h5` and `...full-images-mobilenetv2-Adam.h5`).
+
+### Prediction and submission
+
+After training, the saved model is reloaded (passing `custom_objects={"KerasLayer": hub.KerasLayer}` so Keras can rebuild the TF-Hub layer). It predicts on all 10,357 test images. Each prediction is a 120-length probability vector, reshaped into the Kaggle submission table: an `id` column plus one column per breed. The results go to `predictions.csv` and `predictions.xlsx`, and the submission goes to `final_predictions.csv`.
+
+### Custom images
+
+The last section runs inference on arbitrary photos placed in `Dog Images/` (the repo ships three samples: a basset, a Bedlington terrier and a pug). For each one it prints the top-5 most likely breeds with their confidence percentages.
+
+## Results / Highlights
+
+A few notes on the numbers, so the README matches what the code actually measures:
+
+- The **full-dataset run reaches ~87% accuracy** (peaking around 0.874), but this is **training accuracy**. The full run fits on all labeled images with no held-out validation split, so it shows how well the model fits data it has seen, not how well it generalizes.
+- The **1,000-image subset run** climbs to ~80% *training* accuracy over a handful of epochs before EarlyStopping triggers. Its small validation set is noisy (high val-loss), so read the subset as a pipeline check, not a performance result.
+- The competition's scoring metric is **multi-class log-loss on the hidden Kaggle test set**, which the notebook doesn't compute because the test images are unlabeled.
+- **Scale:** 120 breeds, 10,222 training images, 10,357 test images, MobileNetV2 backbone at 224×224, batches of 32.
+
+In short, the pipeline trains and predicts end to end and the full model fits the training data well. Treat the accuracy figures as training-set numbers, not a validated test score.
+
+## Tech Stack
+
+- **Language:** Python 3.x
+- **Frameworks / libraries:** TensorFlow, TensorFlow Hub, `tf_keras`, scikit-learn (`train_test_split`)
+- **Data / numerics:** pandas, NumPy, Matplotlib
+- **Model:** MobileNetV2 (`mobilenet_v2_130_224`) via TF-Hub, fine-tuned with a Dense(120) softmax head
+- **Tooling / infra:** Jupyter Notebook, Google Colab (GPU runtime + Google Drive mounts), TensorBoard, Git LFS for the large data and model files
+
+## Getting Started
+
+### Prerequisites
+
+- Python 3.x (a GPU runtime is strongly recommended, since training on CPU is slow)
+- The Kaggle [Dog Breed Identification](https://www.kaggle.com/c/dog-breed-identification) dataset (`train/`, `test/`, `labels.csv`, `sample_submission.csv`)
+- Git LFS installed, since the notebook, model checkpoints and data files are stored with LFS
+
+### Installation
 
 ```bash
 git lfs install
 git clone https://github.com/DCode-v05/Dog-Breed-Classification.git
-pip install tensorflow tensorflow-hub tf-keras pandas numpy matplotlib scikit-learn
+cd Dog-Breed-Classification
+pip install tensorflow tensorflow_hub tf_keras pandas numpy matplotlib scikit-learn
+```
+
+### Running
+
+Open the notebook and run the cells top to bottom:
+
+```bash
 jupyter notebook "Dog Breed Classification.ipynb"
 ```
 
-The notebook, model files and logs are stored with Git LFS. The notebook was written for Google Colab with a GPU and Google Drive for the data, so the paths need adjusting to run elsewhere. TensorBoard event files from seven training runs are in `logs/`.
+The notebook was written for Google Colab with a GPU runtime and Google Drive for the dataset and checkpoints, so the paths need adjusting to run anywhere else:
+
+```python
+from google.colab import drive
+drive.mount('/content/drive')
+```
+
+**Note:** in the current checkout the notebook, images, `.h5` models and logs are Git LFS pointer files (the `.gitattributes` file is gone). Until the real LFS objects are fetched, the notebook can't be opened as JSON and the data files are empty placeholders.
+
+## Usage
+
+- **Train:** run the data-prep and training cells. Start with the 1,000-image subset to verify the pipeline, then run the full-dataset training cell for the real model.
+- **Monitor:** point TensorBoard at the `logs/` directory to see loss and accuracy curves across runs.
+- **Predict on the test set:** the prediction cells load the saved model and write `final_predictions.csv` in Kaggle submission format, ready to upload to the competition.
+- **Classify your own photos:** put images in `Dog Images/` and run the custom-image section to see the top-5 predicted breeds with confidence scores.
+- **Reuse the model:** load a saved checkpoint with
+  ```python
+  from tensorflow.keras.models import load_model
+  import tensorflow_hub as hub
+  model = load_model("model/...full-images-mobilenetv2-Adam.h5",
+                     custom_objects={"KerasLayer": hub.KerasLayer})
+  ```
+
+## Project Structure
+
+```
+Dog-Breed-Classification/
+├── Dog Breed Classification.ipynb   # The full pipeline: data -> train -> predict -> submit (95 cells)
+├── .gitignore                       # Python / notebook ignores
+├── labels.csv                       # 10,222 rows mapping image id -> breed (120 unique breeds)
+├── sample_submission.csv            # Kaggle reference format (id + 120 breed columns)
+├── train/                           # 10,222 labeled training images
+├── test/                            # 10,357 unlabeled test images for prediction
+├── Dog Images/                      # 3 sample photos for custom inference (basset, bedlington_terrier, pug)
+├── model/                           # Saved MobileNetV2 checkpoints (.h5): 1000-image and full-image runs
+├── logs/                            # TensorBoard event files (7 timestamped training runs)
+├── predictions.csv                  # Raw test-set predictions
+├── predictions.xlsx                 # Same predictions in Excel
+├── final_predictions.csv            # Kaggle-format submission file
+└── README.md
+```
+
+---
+
+## Contact
+
+<table>
+  <tr><td><b>Portfolio:</b> <a href="https://www.denistan.me">Denistan</a></td><td><b>LinkedIn:</b> <a href="https://www.linkedin.com/in/denistanb">denistanb</a></td></tr>
+  <tr><td><b>GitHub:</b> <a href="https://github.com/DCode-v05">DCode-v05</a></td><td><b>LeetCode:</b> <a href="https://leetcode.com/u/Denistan_B">Denistan_B</a></td></tr>
+  <tr><td colspan="2" align="center"><b>Email:</b> <a href="mailto:denistanb05@gmail.com">denistanb05@gmail.com</a></td></tr>
+</table>
+
+Made with ❤️ by **Denistan B**
